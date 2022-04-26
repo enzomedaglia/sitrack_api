@@ -1,0 +1,108 @@
+"""
+    sitrack_api_call.py
+"""
+
+# Imports
+import io
+from azure.storage.blob import ContainerClient
+from datetime import datetime
+import data_manager
+
+# Imports API Sitrack
+import http.client
+import json
+import time
+from hashlib import md5
+from base64 import b64encode
+
+# Configuration
+USER_NAME = '********'
+PASSWORD = '********'
+
+# Globals
+sessionId = None
+secretKey = None
+
+# IMPORTANT: Replace the xx for the correct country you would like: ar | br | cl | mx | uy | etc
+# uncomment the server you would like to access
+# server = 'test-externalappgw.xx.sitrack.com'
+server = 'externalappgw.xx.sitrack.com'
+
+# Routes
+## --- --- --- --- --- --- --- --- --- --- --- ---
+context = '/files/reports'
+
+## --- --- --- --- --- --- --- --- --- --- --- ---
+# context = '/v2/report'
+
+#########################################################################################################################
+def sitrack_request(user:str = USER_NAME, pw: str = PASSWORD) -> json:
+    global sessionId
+    global secretKey
+
+    USER_NAME = user
+    PASSWORD = pw
+
+    while True:
+        if sessionId is None:
+            userAndPass = (USER_NAME + ':' + PASSWORD).encode('ascii')
+            encodedUserAndPass = b64encode(userAndPass).decode()
+            headers = {'Authorization': 'Basic ' + encodedUserAndPass}
+
+            conn = http.client.HTTPSConnection(server)
+            conn.request('GET', '/session', None, headers)
+
+            response = conn.getresponse()
+            body = response.read().decode('utf-8')
+
+            if response.getcode() != 200:
+                print(body)
+                break
+
+        session = json.loads(body)
+
+        sessionId = session['sessionId']
+        secretKey = session['secretKey']
+        conn.close()
+
+        timestamp = str(int(time.time()))
+        # sessionHash = md5.new(sessionId + secretKey + timestamp).digest()
+        sessionHash = md5(str(sessionId + secretKey + timestamp).encode()).digest()
+        signature = b64encode(sessionHash).decode()
+        headers = {
+            'Authorization': 'StkAuth session="' + sessionId + '",signature="' + signature + '",timestamp="' + timestamp + '"'
+        }
+
+        conn = http.client.HTTPSConnection(server)
+        conn.request('GET', context, None, headers)
+        response = conn.getresponse()
+
+        print('HTTP Code: ', response.getcode())
+
+        body = response.read().decode('utf-8')
+        print(body)
+
+        if response.getcode() == 200:
+            print(len(body))
+            # Aquí llamar a una función particular para al parseo del contenido.
+
+        elif response.getcode() == 401:
+
+            unauthorized = json.loads(body)
+
+            if unauthorized['errorCode'] == '111':
+                sessionId = None
+                secretKey = None
+
+                # Espera 30 segundos antes de renovar sesión.
+                time.sleep(30)
+                continue
+
+        conn.close()
+        # Espera de 5 minutos entre consultas aunque se produzcan excepciones en el bloque principal.
+        time.sleep(300)
+
+
+# execute this script
+sitrack_request(USER_NAME, PASSWORD)
+
