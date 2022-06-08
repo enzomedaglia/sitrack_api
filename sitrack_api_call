@@ -4,7 +4,6 @@
 
 # Imports
 import io
-from azure.storage.blob import ContainerClient
 from datetime import datetime
 import data_manager
 
@@ -103,6 +102,8 @@ def sitrack_request(user:str = USER_NAME, pw: str = PASSWORD) -> json:
         time.sleep(300)
 
 
-# execute this script
-sitrack_request(USER_NAME, PASSWORD)
+if __name__ == "__main__":
+
+    # execute this script
+    sitrack_request(USER_NAME, PASSWORD)
 
